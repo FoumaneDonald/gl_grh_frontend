@@ -15,8 +15,6 @@ export default defineConfig([
       reactRefresh.configs.vite,
     ],
     plugins: {
-      "react-hooks": reactHooks,
-      "react-refresh": reactRefresh,
       security,
     },
     languageOptions: {
