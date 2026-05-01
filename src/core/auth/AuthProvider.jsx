@@ -15,6 +15,7 @@ export default function AuthProvider({ children }) {
       setChecking(false);
     };
     init();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // runs once on mount
 
   if (checking) {

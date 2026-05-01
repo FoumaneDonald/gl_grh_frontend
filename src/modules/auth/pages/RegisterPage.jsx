@@ -46,7 +46,7 @@ export default function RegisterPage() {
   const onSubmit = async (data) => {
     setServerError(null);
     try {
-      const { confirmPassword, ...payload } = data;
+      const { confirmPassword: _confirmPassword, ...payload } = data;
       const response = await authService.register(payload);
       await fetchAndStoreUser(response.token);
       navigate("/");

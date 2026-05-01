@@ -21,7 +21,7 @@ const ICONS = {
 };
 
 export default function Sidebar({ open }) {
-  const { user, hasRole } = useAuth();
+  const { user } = useAuth();
 
   const userRole = user?.role?.name ? "ROLE_" + user.role.name : null;
 

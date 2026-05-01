@@ -7,6 +7,14 @@ import { defineConfig, globalIgnores } from "eslint/config";
 
 export default defineConfig([
   globalIgnores(["dist", "coverage", "cypress"]),
+  // Relax rules for shadcn auto-generated UI components
+  {
+    files: ["src/components/ui/**/*.{js,jsx}"],
+    rules: {
+      "react-refresh/only-export-components": "off",
+      "no-unused-vars": "off",
+    },
+  },
   {
     files: ["**/*.{js,jsx}"],
     extends: [
