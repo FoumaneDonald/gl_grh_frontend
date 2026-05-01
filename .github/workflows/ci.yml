@@ -1,0 +1,187 @@
+name: GRH Frontend CI
+
+on:
+  push:
+    branches: [master, develop]
+  pull_request:
+    branches: [master, develop]
+
+jobs:
+  # ─── JOB 1: Unit Tests + Coverage ─────────────────────────────────────────
+  unit-tests:
+    name: Unit Tests & Coverage
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run unit tests with coverage
+        run: npm run test:coverage
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
+
+  # ─── JOB 2: SAST ───────────────────────────────────────────────────────────
+  sast-eslint:
+    name: SAST — ESLint Security
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run ESLint security scan
+        run: npm run lint:security
+
+  # ─── JOB 3: SAST — CodeQL ──────────────────────────────────────────────────
+  sast-codeql:
+    name: SAST — CodeQL Analysis
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+
+  # ─── JOB 4: Build ──────────────────────────────────────────────────────────
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: [unit-tests, sast-eslint]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+        env:
+          VITE_API_URL: ${{ secrets.VITE_API_URL }}
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  # ─── JOB 5: E2E Tests ──────────────────────────────────────────────────────
+  e2e-tests:
+    name: E2E Tests — Cypress/Gherkin
+    runs-on: ubuntu-latest
+    needs: [build]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Cypress E2E tests
+        uses: cypress-io/github-action@v6
+        with:
+          start: npm run dev
+          wait-on: http://localhost:8005
+          wait-on-timeout: 60
+        env:
+          VITE_API_URL: http://localhost:8080
+
+      - name: Upload Cypress screenshots on failure
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: cypress-screenshots
+          path: cypress/screenshots/
+
+  # ─── JOB 6: DAST — OWASP ZAP ──────────────────────────────────────────────
+  dast-zap:
+    name: DAST — OWASP ZAP Baseline
+    runs-on: ubuntu-latest
+    needs: [build]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Start dev server in background
+        run: npm run dev &
+        env:
+          VITE_API_URL: http://localhost:8080
+
+      - name: Wait for server
+        run: npx wait-on http://localhost:8005 --timeout 30000
+
+      - name: Run OWASP ZAP Baseline Scan
+        uses: zaproxy/action-baseline@v0.12.0
+        with:
+          target: http://localhost:8005
+          rules_file_name: .zap/rules.tsv
+          fail_action: false
+          artifact_name: zap-report
+
+      - name: Upload ZAP report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: zap-security-report
+          path: report_html.html
